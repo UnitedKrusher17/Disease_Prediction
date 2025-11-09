@@ -1,1 +1,3 @@
 # Disease_Prediction
+
+The full Random Forest model is too large for this repository. To run the app, please download the rf_model_local.joblib file from (https://drive.google.com/file/d/1GcxIbb2KHjPTRUxErbCcuUgJnt7QzDMq/view?usp=sharing) and place it in the project folder. The current rf_model_local is a blank and could be replaced with the one downloaded.
