@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PathoBot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <style>
+        body {
+            background: linear-gradient(135deg, #89f7fe, #66a6ff);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 50px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        p.caption {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-select, .btn {
+            border-radius: 15px;
+        }
+        .btn-predict {
+            background: linear-gradient(to right, #8f94fb, #4e54c8);
+            border: none;
+            color: white;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .btn-predict:hover {
+            transform: scale(1.05);
+        }
+        .card {
+            margin-top: 20px;
+            border-radius: 15px;
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .progress {
+            height: 25px;
+            border-radius: 12px;
+        }
+        .spinner {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .remove-btn {
+            margin-left: 10px;
+        }
+        #diseaseDetail {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container animate__animated animate__fadeIn">
+    <h1>PathoBot</h1>
+    <p class="caption">Predict diseases early with AI</p>
+
+    <!-- Symptom selectors -->
+    <div id="symptomContainer">
+        <div class="input-group mb-3 symptom-row">
+            <select class="form-select symptom-dropdown">
+                <option value="">Select symptom</option>
+            </select>
+            <button class="btn btn-danger remove-btn" onclick="removeSymptom(this)">Remove</button>
+        </div>
+    </div>
+    <button class="btn btn-secondary w-100 mb-3" onclick="addSymptom()">Add Symptom</button>
+    <button class="btn btn-predict w-100" onclick="predictDisease()">Predict Disease</button>
+
+    <div class="spinner" id="loadingSpinner">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <div id="results"></div>
+
+    <!-- Disease Detail Section -->
+    <div id="diseaseDetail">
+        <button class="btn btn-secondary mb-3" onclick="backToPredictions()">Back</button>
+        <div id="detailContent" class="animate__animated animate__fadeIn"></div>
+    </div>
+</div>
+
+<script>
+    // Fetch all symptoms from backend
+    async function loadSymptoms() {
+        try {
+            const res = await fetch('http://127.0.0.1:8001/all_symptoms');
+            const data = await res.json();
+            return data.symptoms;
+        } catch (err) {
+            console.error(err);
+            return [];
+        }
+    }
+
+    let allSymptoms = [];
+    loadSymptoms().then(s => {
+        allSymptoms = s;
+        document.querySelectorAll('.symptom-dropdown').forEach(populateDropdown);
+    });
+
+    function populateDropdown(dropdown) {
+        dropdown.innerHTML = '<option value="">Select symptom</option>';
+        allSymptoms.forEach(sym => {
+            const option = document.createElement('option');
+            option.value = sym;
+            option.textContent = sym;
+            dropdown.appendChild(option);
+        });
+    }
+
+    function addSymptom() {
+        const container = document.getElementById('symptomContainer');
+        const row = document.createElement('div');
+        row.className = 'input-group mb-3 symptom-row';
+        row.innerHTML = `
+            <select class="form-select symptom-dropdown"></select>
+            <button class="btn btn-danger remove-btn" onclick="removeSymptom(this)">Remove</button>
+        `;
+        container.appendChild(row);
+        populateDropdown(row.querySelector('select'));
+    }
+
+    function removeSymptom(button) {
+        const row = button.parentNode;
+        row.parentNode.removeChild(row);
+    }
+
+    async function predictDisease() {
+        const resultsDiv = document.getElementById('results');
+        const spinner = document.getElementById('loadingSpinner');
+        const symptomDropdowns = document.querySelectorAll('.symptom-dropdown');
+        const symptoms = Array.from(symptomDropdowns)
+            .map(d => d.value)
+            .filter(v => v);
+
+        if (symptoms.length === 0) {
+            alert("Please select at least one symptom.");
+            return;
+        }
+
+        resultsDiv.innerHTML = '';
+        spinner.style.display = 'block';
+
+        try {
+            const response = await fetch('http://127.0.0.1:8001/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ symptoms })
+            });
+            if (!response.ok) throw new Error("API request failed");
+
+            const data = await response.json();
+            spinner.style.display = 'none';
+
+            data.top_diseases.forEach((disease, index) => {
+                const prob = (data.top_probs[index] * 100).toFixed(2);
+                const card = document.createElement('div');
+                card.className = 'card shadow-sm animate__animated animate__fadeInUp';
+                card.innerHTML = `
+                    <div class="card-body">
+                        <h5 class="card-title">${disease}</h5>
+                        <div class="progress mt-2">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${prob}%;">
+                                ${prob}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+                card.onclick = () => showDiseaseDetail(disease, symptoms);
+                resultsDiv.appendChild(card);
+            });
+
+        } catch (error) {
+            spinner.style.display = 'none';
+            resultsDiv.innerHTML = `<p class="text-danger text-center mt-3">Error: ${error.message}</p>`;
+        }
+    }
+
+    async function showDiseaseDetail(disease, symptoms) {
+        document.getElementById('results').style.display = 'none';
+        document.getElementById('diseaseDetail').style.display = 'block';
+        const detailDiv = document.getElementById('detailContent');
+        detailDiv.innerHTML = '<p>Loading...</p>';
+
+        try {
+            const response = await fetch('http://127.0.0.1:8001/disease_detail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ disease, symptoms })
+            });
+            const data = await response.json();
+            // Insert the HTML directly from backend
+            detailDiv.innerHTML = data.detail;
+        } catch (err) {
+            detailDiv.innerHTML = `<p class="text-danger">Error loading disease details.</p>`;
+        }
+    }
+
+    function backToPredictions() {
+        document.getElementById('diseaseDetail').style.display = 'none';
+        document.getElementById('results').style.display = 'block';
+    }
+</script>
+</body>
+</html>
